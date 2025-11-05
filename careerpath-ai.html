@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareerPath AI - Indian Career Counselor Chatbot</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; overflow: auto; } 
+  #chat-window::-webkit-scrollbar { width: 6px; }
+  #chat-window::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+
+  #sidebar {
+    transition: transform 0.3s ease-in-out;
+    transform: translateX(-100%);
+  }
+  #sidebar.open {
+    transform: translateX(0);
+  }
+</style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+<div class="flex w-full max-w-5xl h-[90vh] bg-white rounded-xl shadow-2xl overflow-hidden relative">
+
+  <!-- Sidebar (Chat History) -->
+  <div id="sidebar" class="absolute left-0 top-0 w-64 bg-gray-100 border-r h-full p-3 flex-col z-20">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="text-lg font-bold">Chat History</h2>
+      <button id="close-history" class="text-gray-600 hover:text-red-600 text-xl font-bold">&times;</button>
+    </div>
+    <div id="history-list" class="overflow-y-auto flex-1 space-y-2 text-sm text-gray-700 mb-3"></div>
+    <button id="clear-history" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 w-full">Clear History</button>
+  </div>
+
+  <!-- Chat Interface -->
+  <div class="flex-1 flex flex-col">
+    
+    <!-- Header -->
+    <div class="bg-blue-600 p-4 text-white flex justify-between items-center">
+      <h1 class="text-2xl font-bold">🎓 CareerPath AI</h1>
+      <button id="open-history" class="bg-blue-500 hover:bg-blue-700 px-3 py-1 rounded text-sm">History</button>
+    </div>
+
+    <!-- Chat Window -->
+    <div id="chat-window" class="flex-1 p-4 space-y-3 overflow-y-auto flex flex-col">
+      <div class="bg-gray-200 p-3 rounded-lg w-fit">👋 Hello! I’m <b>CareerPath AI</b>, your personal career counselor for courses and opportunities in India. How can I guide you today?</div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="p-3 border-t flex gap-2">
+      <input 
+        id="message-input" 
+        type="text" 
+        placeholder="Ask about courses, exams, or careers in India..." 
+        class="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+      >
+      <button 
+        id="send-button"
+        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+      >Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const chatWindow = document.getElementById("chat-window");
+const input = document.getElementById("message-input");
+const sendBtn = document.getElementById("send-button");
+const historyList = document.getElementById("history-list");
+const sidebar = document.getElementById("sidebar");
+const openHistory = document.getElementById("open-history");
+const closeHistory = document.getElementById("close-history");
+const clearHistory = document.getElementById("clear-history");
+
+let chatHistory = JSON.parse(localStorage.getItem("chatHistory") || "[]");
+let quizMode = false;
+let quizIndex = 0;
+let quizAnswers = [];
+
+// ✅ Career Quiz Questions
+const careerQuiz = [
+  {
+    question: "1️⃣ Which subject do you enjoy most?",
+    options: ["Mathematics", "Biology", "Literature", "Art/Design", "Business Studies"]
+  },
+  {
+    question: "2️⃣ What type of work appeals to you?",
+    options: ["Solving technical problems", "Helping people", "Writing or teaching", "Creating or designing", "Managing or leading teams"]
+  },
+  {
+    question: "3️⃣ Which skill describes you best?",
+    options: ["Logical thinker", "Empathetic", "Communicator", "Creative", "Strategic"]
+  },
+  {
+    question: "4️⃣ What kind of career do you dream of?",
+    options: ["Engineer / IT Professional", "Doctor / Psychologist", "Professor / Journalist", "Designer / Artist", "Entrepreneur / Manager"]
+  }
+];
+
+// ✅ Event Listeners
+sendBtn.onclick = sendMessage;
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+openHistory.onclick = () => sidebar.classList.add("open");
+closeHistory.onclick = () => sidebar.classList.remove("open");
+clearHistory.onclick = clearChatHistory;
+
+// Load saved history
+renderHistory();
+
+// ✅ Add "Take Career Quiz" button automatically
+addQuizButton();
+
+// 🧠 Function: Add Quiz Button
+function addQuizButton() {
+  const quizBtn = document.createElement("button");
+  quizBtn.textContent = "🎯 Take Career Quiz";
+  quizBtn.className = "bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition self-start";
+  quizBtn.onclick = startCareerQuiz;
+  chatWindow.appendChild(quizBtn);
+}
+
+// 🚀 Start Quiz
+function startCareerQuiz() {
+  quizMode = true;
+  quizIndex = 0;
+  quizAnswers = [];
+  chatWindow.innerHTML = "";
+  showQuizQuestion();
+}
+
+// 🧩 Show Each Question
+function showQuizQuestion() {
+  if (quizIndex >= careerQuiz.length) return showQuizResult();
+
+  const q = careerQuiz[quizIndex];
+  const botDiv = document.createElement("div");
+  botDiv.className = "bg-gray-200 p-3 rounded-lg max-w-[80%] shadow";
+  botDiv.innerHTML = `<b>${q.question}</b>`;
+  chatWindow.appendChild(botDiv);
+
+  const btnContainer = document.createElement("div");
+  btnContainer.className = "flex flex-wrap gap-2 mt-2";
+
+  q.options.forEach(opt => {
+    const btn = document.createElement("button");
+    btn.textContent = opt;
+    btn.className = "bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700";
+    btn.onclick = () => handleQuizAnswer(opt);
+    btnContainer.appendChild(btn);
+  });
+
+  chatWindow.appendChild(btnContainer);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// 🧾 Handle Answer
+function handleQuizAnswer(answer) {
+  quizAnswers.push(answer);
+  quizIndex++;
+  showQuizQuestion();
+}
+
+// 🎯 Show Result
+function showQuizResult() {
+  quizMode = false;
+  const suggestion = analyzeCareerQuiz();
+  const botDiv = document.createElement("div");
+  botDiv.className = "bg-yellow-100 border-l-4 border-yellow-500 p-3 rounded-lg max-w-[80%] shadow";
+  botDiv.innerHTML = `<b>Based on your choices, you might excel in:</b><br><br>${suggestion}`;
+  chatWindow.appendChild(botDiv);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  // Add quiz button again for new session
+  addQuizButton();
+}
+
+// 🧮 Analyze Results
+function analyzeCareerQuiz() {
+  const text = quizAnswers.join(" ").toLowerCase();
+
+  if (text.includes("math") || text.includes("technical") || text.includes("engineer"))
+    return "👨‍💻 Engineering, Computer Science, or Data Science fields.";
+  if (text.includes("biology") || text.includes("doctor") || text.includes("helping"))
+    return "🧬 Medicine, Psychology, or Nursing careers.";
+  if (text.includes("art") || text.includes("design") || text.includes("creative"))
+    return "🎨 Design, Fine Arts, or Animation fields.";
+  if (text.includes("business") || text.includes("manager") || text.includes("entrepreneur"))
+    return "💼 Management, Marketing, or Entrepreneurship.";
+  if (text.includes("writing") || text.includes("literature") || text.includes("communication"))
+    return "🗞 Journalism, Law, or Education fields.";
+
+  return "📚 Explore multidisciplinary fields — you have diverse interests!";
+}
+
+// 💬 Regular Chat Mode (AI responses)
+async function sendMessage() {
+  const userMsg = input.value.trim();
+  if (!userMsg || quizMode) return;
+  
+  input.value = "";
+  input.disabled = sendBtn.disabled = true;
+
+  const userDiv = document.createElement("div");
+  userDiv.className = "bg-blue-600 text-white p-3 rounded-lg max-w-[80%] self-end shadow";
+  userDiv.textContent = userMsg;
+  chatWindow.appendChild(userDiv);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  const botDiv = document.createElement("div");
+  botDiv.className = "bg-gray-200 p-3 rounded-lg max-w-[80%] shadow";
+  botDiv.textContent = "Typing...";
+  chatWindow.appendChild(botDiv);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  let reply;
+  try {
+    reply = await getAIResponse(userMsg);
+  } catch (err) {
+    reply = "⚠ Sorry, I couldn't connect right now.";
+  }
+  await typeWriterEffect(botDiv, reply);
+
+  chatHistory.push({ user: userMsg, bot: reply });
+  localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+  renderHistory();
+
+  input.disabled = sendBtn.disabled = false;
+  input.focus();
+}
+
+// 🌐 Connect to Gemini
+async function getAIResponse(message) {
+  const apiKey = "AIzaSyAyEughnCtTAY7biqyjazNoy57qqPok6K0";
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+  const payload = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `You are CareerPath AI — an expert Indian career counselor. 
+Guide students about courses, exams, and opportunities in India in a friendly way.
+User's message: ${message}`
+          }
+        ]
+      }
+    ]
+  };
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) throw new Error("Network error");
+  const data = await res.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+}
+
+// 🪶 Typing Animation
+async function typeWriterEffect(element, text) {
+  element.textContent = "";
+  for (let char of text) {
+    element.textContent += char;
+    await new Promise(r => setTimeout(r, 20));
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+}
+
+// 📜 History Functions
+function renderHistory() {
+  historyList.innerHTML = "";
+  chatHistory.forEach((c, i) => {
+    const item = document.createElement("div");
+    item.className = "p-2 border rounded bg-white hover:bg-gray-200 cursor-pointer";
+    item.textContent = `${i + 1}. ${c.user.slice(0, 20)}...`;
+    item.onclick = () => showConversation(i);
+    historyList.appendChild(item);
+  });
+}
+
+function showConversation(index) {
+  const convo = chatHistory[index];
+  if (!convo) return;
+  alert(`🗨 You: ${convo.user}\n\n🤖 Bot: ${convo.bot}`);
+}
+
+function clearChatHistory() {
+  if (confirm("Are you sure you want to clear all chat history?")) {
+    chatHistory = [];
+    localStorage.removeItem("chatHistory");
+    historyList.innerHTML = "";
+  }
+}
+</script>
+</body>
+</html>
